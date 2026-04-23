@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube 자막 추출기</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #0e0e14;
+      color: #f0f0f0;
+      font-family: 'Noto Sans KR', sans-serif;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 48px 20px;
+    }
+
+    .wrap { width: 100%; max-width: 680px; }
+
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #ff4444, #cc0000);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      font-size: 30px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .sub { color: #555; font-size: 14px; margin-bottom: 36px; }
+
+    .card {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .input-row { display: flex; gap: 10px; }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 13px 16px;
+      border-radius: 10px;
+      border: 1.5px solid #2a2a3a;
+      background: #0e0e14;
+      color: #f0f0f0;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border 0.2s;
+    }
+    input[type="text"]:focus { border-color: #ff4444; }
+    input::placeholder { color: #444; }
+
+    button.btn-main {
+      padding: 13px 22px;
+      border-radius: 10px;
+      border: none;
+      background: #ff4444;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    button.btn-main:hover { background: #cc2222; }
+    button.btn-main:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
+
+    .thumbnail {
+      margin-top: 16px;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+    .thumbnail img { width: 100%; display: block; }
+    .thumbnail .vid-id {
+      position: absolute;
+      bottom: 10px; left: 12px;
+      font-size: 11px;
+      color: #ccc;
+      background: rgba(0,0,0,0.5);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 32px 0;
+      color: #666;
+      font-size: 14px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid #2a2a3a;
+      border-top-color: #ff4444;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error {
+      padding: 14px 18px;
+      background: rgba(255,68,68,0.08);
+      border: 1px solid rgba(255,68,68,0.2);
+      border-radius: 12px;
+      color: #ff8888;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .result-label { font-size: 13px; color: #666; }
+
+    button.btn-copy {
+      padding: 7px 16px;
+      border-radius: 8px;
+      border: 1px solid #3a3a4a;
+      background: transparent;
+      color: #aaa;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button.btn-copy.copied {
+      border-color: #44cc88;
+      color: #44cc88;
+      background: rgba(68,204,136,0.1);
+    }
+
+    .result-box {
+      background: #0e0e14;
+      border: 1px solid #2a2a3a;
+      border-radius: 14px;
+      padding: 24px;
+      max-height: 460px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 2;
+      color: #d8d8e8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .char-count {
+      text-align: right;
+      font-size: 11px;
+      color: #333;
+      margin-top: 8px;
+    }
+
+    footer {
+      text-align: center;
+      color: #2a2a3a;
+      font-size: 11px;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="badge">▶ YouTube</div>
+  <h1>자막 추출기</h1>
+  <p class="sub">URL을 붙여넣으면 자막을 텍스트로 가져와드려요</p>
+
+  <div class="card">
+    <div class="input-row">
+      <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=..." />
+      <button class="btn-main" id="extractBtn" onclick="extract()">추출하기</button>
+    </div>
+    <div id="thumbArea"></div>
+  </div>
+
+  <div id="loadingArea" class="loading" style="display:none;">
+    <div class="spinner"></div>
+    <div>자막을 가져오는 중이에요...</div>
+  </div>
+
+  <div id="errorArea" class="error" style="display:none;"></div>
+
+  <div id="resultArea" style="display:none;">
+    <div class="result-header">
+      <span class="result-label">📄 추출된 자막 텍스트</span>
+      <button class="btn-copy" id="copyBtn" onclick="copyText()">📋 전체 복사</button>
+    </div>
+    <div class="result-box" id="resultBox"></div>
+    <div class="char-count" id="charCount"></div>
+  </div>
+
+  <footer>자막이 없거나 비공개 영상은 추출이 어려울 수 있어요</footer>
+</div>
+
+<script>
+  function extractVideoId(url) {
+    const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+    return m ? m[1] : null;
+  }
+
+  const urlInput = document.getElementById('urlInput');
+  urlInput.addEventListener('input', () => {
+    const vid = extractVideoId(urlInput.value.trim());
+    const thumbArea = document.getElementById('thumbArea');
+    if (vid) {
+      thumbArea.innerHTML = `
+        <div class="thumbnail">
+          <img src="https://img.youtube.com/vi/${vid}/mqdefault.jpg" alt="썸네일" />
+          <span class="vid-id">ID: ${vid}</span>
+        </div>`;
+    } else {
+      thumbArea.innerHTML = '';
+    }
+  });
+
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') extract();
+  });
+
+  async function extract() {
+    const url = urlInput.value.trim();
+    const videoId = extractVideoId(url);
+
+    document.getElementById('errorArea').style.display = 'none';
+    document.getElementById('resultArea').style.display = 'none';
+
+    if (!videoId) {
+      showError('올바른 YouTube URL을 입력해주세요.');
+      return;
+    }
+
+    document.getElementById('loadingArea').style.display = 'block';
+    document.getElementById('extractBtn').disabled = true;
+
+    try {
+      // 배포 후 이 URL은 자동으로 같은 도메인의 /api/transcript 로 연결돼요
+      const res = await fetch(`/api/transcript?videoId=${videoId}`);
+      const data = await res.json();
+
+      if (data.success && data.text) {
+        document.getElementById('resultBox').textContent = data.text;
+        document.getElementById('charCount').textContent = `${data.text.length.toLocaleString()}자`;
+        document.getElementById('resultArea').style.display = 'block';
+      } else {
+        showError(data.error || '자막을 가져오지 못했어요.');
+      }
+    } catch (e) {
+      showError('오류가 발생했어요: ' + e.message);
+    } finally {
+      document.getElementById('loadingArea').style.display = 'none';
+      document.getElementById('extractBtn').disabled = false;
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorArea');
+    el.textContent = '⚠️ ' + msg;
+    el.style.display = 'block';
+  }
+
+  function copyText() {
+    const text = document.getElementById('resultBox').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = '✅ 복사됨!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = '📋 전체 복사';
+        btn.classList.remove('copied');
+      }, 2200);
+    });
+  }
+</script>
+</body>
+</html>

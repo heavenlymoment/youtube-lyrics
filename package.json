@@ -1,0 +1,11 @@
+{
+  "name": "yt-transcript",
+  "version": "1.0.0",
+  "description": "YouTube 자막 추출기",
+  "dependencies": {
+    "youtube-transcript": "^1.2.1"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
