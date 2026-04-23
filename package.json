@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "YouTube 자막 추출기",
   "dependencies": {
-    "youtube-transcript": "^1.2.1"
+    "youtube-transcript": "^1.2.1",
+    "formidable": "^3.5.1",
+    "node-fetch": "^2.7.0",
+    "form-data": "^4.0.0"
   },
   "engines": {
     "node": "20.x"
