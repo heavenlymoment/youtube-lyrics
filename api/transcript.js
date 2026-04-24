@@ -9,68 +9,54 @@ export default async function handler(req, res) {
   if (!videoId) return res.status(400).json({ error: 'videoId가 필요합니다.' });
 
   try {
-    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-      }
+    // 방법 1: Tactiq 공개 API 시도
+    const tactiqRes = await fetch(`https://tactiq-apps-prod.tactiq.io/transcript`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoUrl: `https://www.youtube.com/watch?v=${videoId}`, langCode: 'ko' })
     });
 
-    const html = await pageRes.text();
-
-    // captionTracks 추출 (자동생성 포함)
-    const captionMatch = html.match(/"captionTracks":(\[.*?\])/);
-    if (!captionMatch) {
-      return res.status(404).json({ success: false, error: '이 영상에는 자막이 없어요.' });
+    if (tactiqRes.ok) {
+      const data = await tactiqRes.json();
+      if (data?.captions?.length) {
+        const text = data.captions.map(c => c.text).join(' ').replace(/\s+/g, ' ').trim();
+        if (text) return res.status(200).json({ success: true, videoId, text });
+      }
     }
+  } catch (e) {}
 
-    const captionTracks = JSON.parse(captionMatch[1]);
-    if (!captionTracks.length) {
-      return res.status(404).json({ success: false, error: '자막 트랙을 찾을 수 없어요.' });
+  try {
+    // 방법 2: YouTube Transcript API 미러 서비스
+    const r = await fetch(`https://youtube-transcript.io/api/transcript?videoId=${videoId}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (r.ok) {
+      const data = await r.json();
+      if (data?.transcript) {
+        const text = data.transcript.map(t => t.text).join(' ').replace(/\s+/g, ' ').trim();
+        if (text) return res.status(200).json({ success: true, videoId, text });
+      }
     }
+  } catch (e) {}
 
-    // 한국어 우선 (자동생성 포함), 없으면 첫 번째
-    const track =
-      captionTracks.find(t => t.languageCode === 'ko') ||
-      captionTracks.find(t => t.languageCode?.startsWith('ko')) ||
-      captionTracks[0];
-
-    const captionUrl = track.baseUrl + '&fmt=json3';
-
-    const xmlRes = await fetch(captionUrl);
-    const json = await xmlRes.json();
-
-    // json3 포맷에서 텍스트 추출
-    let text = '';
-    if (json.events) {
-      text = json.events
-        .filter(e => e.segs)
-        .map(e => e.segs.map(s => s.utf8 || '').join(''))
-        .join(' ')
-        .replace(/\n/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+  try {
+    // 방법 3: Supadata API
+    const r = await fetch(`https://api.supadata.ai/v1/youtube/transcript?url=https://www.youtube.com/watch?v=${videoId}&lang=ko`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (r.ok) {
+      const data = await r.json();
+      if (data?.content) {
+        const text = Array.isArray(data.content)
+          ? data.content.map(t => t.text).join(' ').replace(/\s+/g, ' ').trim()
+          : data.content;
+        if (text) return res.status(200).json({ success: true, videoId, text });
+      }
     }
+  } catch (e) {}
 
-    if (!text) {
-      // fallback: XML 방식
-      const xmlRes2 = await fetch(track.baseUrl);
-      const xml = await xmlRes2.text();
-      const textMatches = xml.match(/<text[^>]*>([\s\S]*?)<\/text>/g) || [];
-      text = textMatches
-        .map(t => t.replace(/<[^>]+>/g, '')
-          .replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'").trim())
-        .filter(Boolean)
-        .join(' ');
-    }
-
-    if (!text) return res.status(404).json({ success: false, error: '자막 텍스트를 추출할 수 없어요.' });
-
-    return res.status(200).json({ success: true, videoId, text, lang: track.languageCode });
-
-  } catch (e) {
-    return res.status(500).json({ success: false, error: '서버 오류: ' + e.message });
-  }
+  return res.status(404).json({
+    success: false,
+    error: '자막을 가져올 수 없어요. 자동생성 자막은 일부 제한이 있을 수 있어요.'
+  });
 }
